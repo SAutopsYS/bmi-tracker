@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Deny everything by default. Only the owner hierarchy below is open.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // users/{uid} and nested private health data.
+    // User A cannot read or write User B's profiles or weight history.
+    // Unauthenticated clients have no access.
+    match /users/{userId} {
+      allow read, create, update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+
+      match /profiles/{profileId} {
+        allow read, create, update, delete: if isOwner(userId);
+
+        match /weightHistory/{entryId} {
+          allow read, create, update, delete: if isOwner(userId);
+        }
+      }
+    }
+  }
+}
